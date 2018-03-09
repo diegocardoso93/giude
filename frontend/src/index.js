@@ -9,6 +9,8 @@ import { Stage, Layer, Image } from 'react-konva';
 import Card from './Card';
 import { RedPoint } from './UnoImages';
 
+const Deck = Array.from(new Array(56), (x, i) => i);
+
 class App extends Component {
   state = {
     image: null
@@ -26,9 +28,10 @@ class App extends Component {
     return (
       <Stage width={window.innerWidth} height={window.innerHeight}>
         <Layer>
-          <Card symbol="2" color="red" x={20} y={10} />
-          <Card symbol="4" color="#aa0000" x={20} y={10} />
-          <Card symbol="9" color="red" x={100} y={100} />
+          <Card cv={2} x={20} y={10} />
+          <Card cv={41} x={40} y={10} />
+          <Card cv={48} x={20} y={10} />
+          <Card cv={52} x={20} y={10} />
           <Image image={this.state.image} />
         </Layer>
       </Stage>
