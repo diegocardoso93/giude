@@ -7,10 +7,7 @@ import { CardsMap, CardsVal, CardsColor } from './CardsMap';
 class Card extends React.Component {
   constructor(props) {
     super(props);
-    this.handleTap = this.handleTap.bind(this);
   }
-  handleTap() {
-  };
   componentDidMount() {
     console.log(this.props)
   }
@@ -668,7 +665,7 @@ class Card extends React.Component {
     return (
       <Group
         draggable={this.props.draggable}
-        onTap={this.handleTap}
+        onTap={this.props.onTap}
         onClick={this.props.onClick}>
         { cardLayout }
       </Group>
