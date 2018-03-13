@@ -4,7 +4,7 @@ import './index.css';
 
 import React, { Component } from 'react';
 import { render } from 'react-dom';
-import { Stage, Layer, Image, Rect, Group } from 'react-konva';
+import { Stage, Layer, Image, Rect, Group, Text } from 'react-konva';
 import Card from './Card';
 import { RedPoint } from './UnoImages';
 import { BrowserRouter as Router, Route, Redirect } from 'react-router-dom'
@@ -61,37 +61,67 @@ class Home extends Component {
   }
 }
 
+/*
+* gstate: 'waitJoin', 'waitMove', 'play'
+* */
 class Uno extends Component {
   state = {
     qtt_players: 4,
     players: [],
     shuffled: false,
     fullscreen: false,
-    current_player: 0
+    current_player: 0,
+    deck: { cards: Array.from(new Array(55), (x, i) => i+1), current: 0},
+    scene: '',
+    gstate: ''
   };
-  Deck = { cards: Array.from(new Array(55), (x, i) => i+1), current: 0};
+  ws;
   constructor(props) {
     super(props);
     this.shuffle = this.shuffle.bind(this);
     this.requestFullscreen = this.requestFullscreen.bind(this);
     this.checkPlay = this.checkPlay.bind(this);
+    this.setQttPlayer = this.setQttPlayer.bind(this);
+    this.setReady = this.setReady.bind(this);
   }
   shuffle() {
-    if (this.Deck.cards.length > 0) {
+    if (this.state.deck.cards.length > 0) {
       let players = this.state.players;
       players.forEach((p, i) => {
         for (let i = 0; i < 7; i++) {
           p.cards.push(this.withdrawCard());
         }
       });
-      this.Deck.current = this.withdrawCard();
+      this.state.deck.current = this.withdrawCard();
       this.setState({players: players, shuffled: true});
     }
   }
   withdrawCard() {
-    return this.Deck.cards.splice(parseInt(Math.random() * this.Deck.cards.length), 1)[0];
+    return this.state.deck.cards.splice(parseInt(Math.random() * this.state.deck.cards.length), 1)[0];
   }
   componentDidMount() {
+
+    this.ws = new WebSocket('ws://localhost:8080');
+    this.ws.onopen = () => {
+      this.ws.send(JSON.stringify({gameId: 'uno', type: 'reqBootstrap'}));
+    };
+    this.ws.onmessage = (m) => {
+      console.log(m);
+      let data = JSON.parse(m.data);
+      console.log(data);
+      if (data.type === 'bootstrapped') {
+        if (data.value === 0) {
+          this.setState({scene: 'qttPlayerSelect'});
+        } else if (data.value === 1) {
+          this.setState({scene: 'reqPlayerReady'});
+        } else if (data.value === 2) {
+          this.setState({scene: 'waitQttPlayer'});
+        } else if (data.value === 3) {
+          this.setState({scene: 'maxQttPlayer'});
+        }
+      }
+    };
+
     let players = this.state.players;
     for (let x=0;x<this.state.qtt_players;x++) {
       players[x] = { cards: [] };
@@ -121,7 +151,7 @@ class Uno extends Component {
     let result = this.verifyCard(cv);
     let cards = players[current_player].cards;
     if (result > 0) {
-      this.Deck.current = cards.splice(i, 1)[0];
+      this.state.deck.current = cards.splice(i, 1)[0];
       this.setState({players: players, current_player: ++current_player%qtt_players});
     }
   }
@@ -134,70 +164,70 @@ class Uno extends Component {
       return 2;
     }
     // same color
-    if ((["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.Deck.current]) > -1
+    if ((["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9"].indexOf(CardsMap[cin]) > -1)
-      ||(["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.Deck.current]) > -1
+      ||(["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9"].indexOf(CardsMap[cin]) > -1)
-      ||(["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.Deck.current]) > -1
+      ||(["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9"].indexOf(CardsMap[cin]) > -1)
-      ||(["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.Deck.current]) > -1
+      ||(["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9"].indexOf(CardsMap[cin]) > -1)
     ) {
       return 3;
     }
-    if ((["RE1", "BL1", "YE1", "GR1"].indexOf(CardsMap[this.Deck.current]) > -1
+    if ((["RE1", "BL1", "YE1", "GR1"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE1", "BL1", "YE1", "GR1"].indexOf(CardsMap[cin]) > -1)
-      ||(["RE2", "BL2", "YE2", "GR2"].indexOf(CardsMap[this.Deck.current]) > -1
+      ||(["RE2", "BL2", "YE2", "GR2"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE2", "BL2", "YE2", "GR2"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE3", "BL3", "YE3", "GR3"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE3", "BL3", "YE3", "GR3"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE3", "BL3", "YE3", "GR3"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE4", "BL4", "YE4", "GR4"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE4", "BL4", "YE4", "GR4"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE4", "BL4", "YE4", "GR4"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE5", "BL5", "YE5", "GR5"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE5", "BL5", "YE5", "GR5"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE5", "BL5", "YE5", "GR5"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE6", "BL6", "YE6", "GR6"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE6", "BL6", "YE6", "GR6"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE6", "BL6", "YE6", "GR6"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE7", "BL7", "YE7", "GR7"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE7", "BL7", "YE7", "GR7"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE7", "BL7", "YE7", "GR7"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE8", "BL8", "YE8", "GR8"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE8", "BL8", "YE8", "GR8"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE8", "BL8", "YE8", "GR8"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE9", "BL9", "YE9", "GR9"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE9", "BL9", "YE9", "GR9"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RE9", "BL9", "YE9", "GR9"].indexOf(CardsMap[cin]) > -1)) {
       return 3;
     }
-    if ((["REB", "BLB", "YEB", "GRB"].indexOf(CardsMap[this.Deck.current]) > -1
+    if ((["REB", "BLB", "YEB", "GRB"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["REB", "BLB", "YEB", "GRB"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "REB")
-    || (["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "BLB")
-    || (["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "YEB")
-    || (["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "GRB")) {
       return 4;
     }
-    if ((["RER", "BLR", "YER", "GRR"].indexOf(CardsMap[this.Deck.current]) > -1
+    if ((["RER", "BLR", "YER", "GRR"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RER", "BLR", "YER", "GRR"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "RER")
-    || (["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "BLR")
-    || (["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "YER")
-    || (["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "GRR")) {
       return 5;
     }
-    if ((["RET", "BLT", "YET", "GRT"].indexOf(CardsMap[this.Deck.current]) > -1
+    if ((["RET", "BLT", "YET", "GRT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && ["RET", "BLT", "YET", "GRT"].indexOf(CardsMap[cin]) > -1)
-    ||  (["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.Deck.current]) > -1
+    ||  (["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "RET")
-    || (["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "BLT")
-    || (["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "YET")
-    || (["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.Deck.current]) > -1
+    || (["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.state.deck.current]) > -1
       && CardsMap[cin] === "GRT")) {
       return 6;
     }
@@ -205,8 +235,100 @@ class Uno extends Component {
     return 0;
   }
 
+  setQttPlayer(qtt) {
+    this.ws.send(JSON.stringify({gameId: 'uno', type: 'initGame', qttPlayers: qtt}));
+  }
+
+  setReady() {
+    this.ws.send(JSON.stringify({gameId: 'uno', type: 'initGame'}));
+
+  }
+
   render() {
     console.log(this.state);
+    let sceneTempl = [];
+    switch (this.state.scene) {
+      case "qttPlayerSelect":
+        sceneTempl.push(
+          <Group key={-9}>
+            <Rect
+              x={40}
+              y={20}
+              width={30}
+              height={30}
+              fill={'black'}
+              cornerRadius={4}
+              onClick={(e) => this.setQttPlayer(1)}
+              onTap={(e) => this.setQttPlayer(1)}
+            />
+            <Rect
+              x={70}
+              y={20}
+              width={30}
+              height={30}
+              fill={'red'}
+              cornerRadius={4}
+              onClick={(e) => this.setQttPlayer(2)}
+              onTap={(e) => this.setQttPlayer(2)}
+            />
+            <Rect
+              x={110}
+              y={20}
+              width={30}
+              height={30}
+              fill={'blue'}
+              cornerRadius={4}
+              onClick={(e) => this.setQttPlayer(3)}
+              onTap={(e) => this.setQttPlayer(3)}
+            />
+            <Rect
+              x={150}
+              y={20}
+              width={30}
+              height={30}
+              fill={'blue'}
+              cornerRadius={4}
+              onClick={(e) => this.setQttPlayer(4)}
+              onTap={(e) => this.setQttPlayer(4)}
+            />
+          </Group>);
+        break;
+        case 'reqPlayerReady':
+          sceneTempl.push(
+            <Text key={-99}
+              x={17}
+              y={35}
+              fontSize={14}
+              fontFamily={'Arial Black'}
+              fill={'black'}
+              text={' Desculpe, primeiro quem iniciou deve decidir \na quantidade de jogadores'}
+            />
+          );
+        break;
+        case 'waitQttPlayer':
+          sceneTempl.push(
+            <Group>
+              <Text key={-99}
+                x={17}
+                y={35}
+                fontSize={14}
+                fontFamily={'Arial Black'}
+                fill={'black'}
+                text={' Aperte o botao abaixo quando estiver pronto para jogar'}
+              />
+              <Rect
+                x={150}
+                y={20}
+                width={30}
+                height={30}
+                fill={'navy'}
+                cornerRadius={4}
+                onClick={(e) => this.setReady()}
+                onTap={(e) => this.setReady()}
+              />
+            </Group>
+        );
+    }
     // Sorteio de cartas
     let playerCardsTempl = [], deckTempl = [];
     if (this.state.shuffled > 0) {
@@ -253,7 +375,7 @@ class Uno extends Component {
       deckTempl.push(
         <Group key={-1}>
           <Card cv={0} x={200} y={116}/>
-          <Card cv={this.Deck.current} x={260} y={116}/>
+          <Card cv={this.state.deck.current} x={260} y={116}/>
         </Group>
       )
     }
@@ -266,6 +388,7 @@ class Uno extends Component {
         <Layer>
           { deckTempl }
           { playerCardsTempl }
+          { sceneTempl }
           <Rect
             x={9 + this.props.x}
             y={9 + this.props.y}
