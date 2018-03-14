@@ -28,7 +28,7 @@ class GameManager {
   }
 
   updateState(gameId, state) {
-    this.games[gameId]['sharedState'] = state;
+    this.games[gameId].sharedState = state;
   }
 
   playerJoin(gameId) {
@@ -43,7 +43,7 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     console.log(data);
 
-    let directMessage = (dataSend) => {
+    let unicastMessage = (dataSend) => {
       wss.clients.forEach((client) => {
         if (client === ws && client.readyState === WebSocket.OPEN) {
           console.log('direct', dataSend);
@@ -55,6 +55,14 @@ wss.on('connection', (ws) => {
       wss.clients.forEach((client) => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
           console.log('broadcast', dataSend);
+          client.send(dataSend);
+        }
+      });
+    };
+    let broadcastAll = (dataSend) => {
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          console.log('broadcastAll', dataSend);
           client.send(dataSend);
         }
       });
@@ -81,17 +89,24 @@ wss.on('connection', (ws) => {
         dataSend = JSON.stringify({type: 'bootstrapped', value: bootstrapped});
         bootstrapped++;
       }
-      directMessage(dataSend);
+      unicastMessage(dataSend);
     } else if (pd.type === 'initGame') {
       if (GM.games[pd.gameId].qttPlayers === -1) {
         GM.setQttPlayers(pd.gameId, pd.qttPlayers);
+        broadcastAll(JSON.stringify({type: 'bootstrapped', value: 1, qttPlayers: pd.qttPlayers}));
+      } else {
+        GM.playerJoin(pd.gameId);
+        let qttPlayerWait = GM.games[pd.gameId].qttPlayers - GM.games[pd.gameId].playersReady;
+        unicastMessage(JSON.stringify({type: 'playerJoin', wait: qttPlayerWait, playerId: GM.games[pd.gameId].playersReady-1}));
+        if (qttPlayerWait === 0 ) {
+          broadcastAll(JSON.stringify({type: 'playerJoin', wait: -1}));
+        }
       }
-
-      // modificar, cada jogador tera um botao de pronto (players: pronto?)
-      GM.playerJoin(pd.gameId);
-      broadcastMessage(JSON.stringify({type: 'playerJoin', wait: GM.games[pd.gameId].qttPlayers - GM.games[pd.gameId].playersReady}));
     } else if (pd.type === 'turn') {
-      GM.updateState(pd.gameId, pd.state);
+      console.log(pd);
+      GM.updateState(pd.gameId, {players: pd.state.players, current_player: pd.state.current_player, deck: pd.state.deck});
+      console.log(GM.games[pd.gameId].sharedState);
+      broadcastMessage(JSON.stringify({type: 'turn', state: GM.games[pd.gameId].sharedState}));
     }
   });
 });

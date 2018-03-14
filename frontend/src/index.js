@@ -62,18 +62,19 @@ class Home extends Component {
 }
 
 /*
-* gstate: 'waitJoin', 'waitMove', 'play'
+* gstate: 'waitQttPlayers', 'waitJoin', 'waitMove', 'play'
 * */
 class Uno extends Component {
   state = {
-    qtt_players: 4,
+    qtt_players: 0,
     players: [],
     shuffled: false,
     fullscreen: false,
     current_player: 0,
     deck: { cards: Array.from(new Array(55), (x, i) => i+1), current: 0},
     scene: '',
-    gstate: ''
+    qtt_players_wait: 0,
+    player_id: -1
   };
   ws;
   constructor(props) {
@@ -94,13 +95,17 @@ class Uno extends Component {
       });
       this.state.deck.current = this.withdrawCard();
       this.setState({players: players, shuffled: true});
+      let next_state = this.state;
+      next_state.shuffled = true;
+      next_state.deck = this.state.deck;
+      next_state.players = players;
+      this.ws.send(JSON.stringify({gameId: 'uno', type: 'turn', state: next_state }));
     }
   }
   withdrawCard() {
     return this.state.deck.cards.splice(parseInt(Math.random() * this.state.deck.cards.length), 1)[0];
   }
   componentDidMount() {
-
     this.ws = new WebSocket('ws://localhost:8080');
     this.ws.onopen = () => {
       this.ws.send(JSON.stringify({gameId: 'uno', type: 'reqBootstrap'}));
@@ -112,22 +117,37 @@ class Uno extends Component {
       if (data.type === 'bootstrapped') {
         if (data.value === 0) {
           this.setState({scene: 'qttPlayerSelect'});
-        } else if (data.value === 1) {
-          this.setState({scene: 'reqPlayerReady'});
-        } else if (data.value === 2) {
+        }  else if (data.value === 1) {
+          this.setState({scene: 'reqPlayerReady', qtt_players: data.qttPlayers});
+        }  else if (data.value === 2) {
           this.setState({scene: 'waitQttPlayer'});
-        } else if (data.value === 3) {
+        }else if (data.value === 3) {
           this.setState({scene: 'maxQttPlayer'});
         }
+      } else if (data.type === 'playerJoin') {
+        if (data.wait >= 0) {
+          this.setState({
+            scene: 'waitPlayerJoin',
+            qtt_players_wait: data.wait,
+            player_id: data.playerId
+          });
+        } else {
+          this.gameInit();
+        }
+      } else if (data.type === 'turn') {
+        this.setState({players: data.state.players, current_player: data.state.current_player, deck: data.state.deck, shuffled: true});
       }
     };
+  }
 
+  gameInit() {
     let players = this.state.players;
     for (let x=0;x<this.state.qtt_players;x++) {
       players[x] = { cards: [] };
     }
     this.setState({
-      players: players
+      players: players,
+      scene: 'gameInit'
     });
   }
 
@@ -146,13 +166,23 @@ class Uno extends Component {
   }
 
   checkPlay(cv, i) {
-    console.log(cv, this.verifyCard(cv));
-    let {players, current_player, qtt_players} = this.state;
-    let result = this.verifyCard(cv);
-    let cards = players[current_player].cards;
-    if (result > 0) {
-      this.state.deck.current = cards.splice(i, 1)[0];
-      this.setState({players: players, current_player: ++current_player%qtt_players});
+    console.log(cv, this.verifyCard(cv), this.state.player_id, this.state.current_player);
+    if (this.state.player_id === this.state.current_player) {
+      let {players, current_player, qtt_players} = this.state;
+      let result = this.verifyCard(cv);
+      let cards = players[current_player].cards;
+      if (result > 0) {
+        let next_state = this.state;
+        next_state.current_player = ++current_player % qtt_players;
+        next_state.players = players;
+        next_state.deck.current = cards.splice(i, 1)[0];
+        this.ws.send(JSON.stringify({gameId: 'uno', type: 'turn', state: next_state }));
+        this.setState({
+          players: next_state.players,
+          current_player: next_state.current_player,
+          deck: next_state.deck
+        });
+      }
     }
   }
 
@@ -241,12 +271,11 @@ class Uno extends Component {
 
   setReady() {
     this.ws.send(JSON.stringify({gameId: 'uno', type: 'initGame'}));
-
   }
 
   render() {
     console.log(this.state);
-    let sceneTempl = [];
+    let sceneTempl = [], deckTempl = [], playerCardsTempl = [];
     switch (this.state.scene) {
       case "qttPlayerSelect":
         sceneTempl.push(
@@ -291,93 +320,117 @@ class Uno extends Component {
               onClick={(e) => this.setQttPlayer(4)}
               onTap={(e) => this.setQttPlayer(4)}
             />
-          </Group>);
-        break;
-        case 'reqPlayerReady':
-          sceneTempl.push(
+          </Group>
+        );
+      break;
+      case 'waitQttPlayer':
+        sceneTempl.push(
+          <Text key={-99}
+            x={17}
+            y={35}
+            fontSize={14}
+            fontFamily={'Arial Black'}
+            fill={'black'}
+            text={' Desculpe, primeiro quem iniciou deve decidir \na quantidade de jogadores'}
+          />
+        );
+      break;
+      case 'reqPlayerReady':
+        sceneTempl.push(
+          <Group>
             <Text key={-99}
               x={17}
               y={35}
               fontSize={14}
               fontFamily={'Arial Black'}
               fill={'black'}
-              text={' Desculpe, primeiro quem iniciou deve decidir \na quantidade de jogadores'}
+              text={' Pronto para jogar? Aperte o botao abaixo quando estiver pronto para jogar'}
             />
-          );
-        break;
-        case 'waitQttPlayer':
-          sceneTempl.push(
-            <Group>
-              <Text key={-99}
+            <Rect
+              x={150}
+              y={40}
+              width={30}
+              height={30}
+              fill={'navy'}
+              cornerRadius={4}
+              onClick={(e) => this.setReady()}
+              onTap={(e) => this.setReady()}
+            />
+          </Group>
+        );
+      break;
+      case 'waitPlayerJoin':
+        sceneTempl.push(
+          <Text key={-99}
                 x={17}
                 y={35}
                 fontSize={14}
                 fontFamily={'Arial Black'}
                 fill={'black'}
-                text={' Aperte o botao abaixo quando estiver pronto para jogar'}
-              />
-              <Rect
-                x={150}
-                y={20}
-                width={30}
-                height={30}
-                fill={'navy'}
-                cornerRadius={4}
-                onClick={(e) => this.setReady()}
-                onTap={(e) => this.setReady()}
-              />
-            </Group>
+                text={' Preparado\n aguardando outros jogadores se conectarem...'}
+          />
         );
-    }
-    // Sorteio de cartas
-    let playerCardsTempl = [], deckTempl = [];
-    if (this.state.shuffled > 0) {
-      this.state.players.forEach((player, p) => {
-        if (p === 0) {
-          let cards = [];
-          player.cards.forEach((cv, i) => {
-            cards.push(<Card key={i} cv={cv} x={90+(30*i)} y={220} onClick={(e) => this.checkPlay(cv, i)} onTap={(e) => this.checkPlay(cv, i)}/>);
+      break;
+      case 'gameInit':
+        // Sorteio de cartas
+        if (this.state.shuffled) {
+          deckTempl.push(
+            <Group key={-1}>
+              <Card cv={0} x={200} y={116}/>
+              <Card cv={this.state.deck.current} x={260} y={116}/>
+            </Group>
+          );
+          this.state.players.forEach((player, p) => {
+            if (p === this.state.player_id) {
+              let cards = [];
+              player.cards.forEach((cv, i) => {
+                cards.push(<Card key={i} cv={cv}
+                                 x={90 + (30 * i)} y={220}
+                                 onClick={(e) => this.checkPlay(cv, i)}
+                                 onTap={(e) => this.checkPlay(cv, i)}/>);
+              });
+              playerCardsTempl.push(
+                <Group key={p}>
+                  {cards}
+                </Group>);
+            } else if (p === 1 || (p === 0 && this.state.player_id === 1)) {
+              let cards = [];
+              player.cards.forEach((cv, i) => {
+                cards.push(<Card key={i} cv={0}
+                                 x={90 + (30 * i)}
+                                 y={10}/>);
+              });
+              playerCardsTempl.push(
+                <Group key={p}>
+                  {cards}
+                </Group>);
+            } else if (p === 2 || (p === 0 && this.state.player_id === 2)) {
+              let cards = [];
+              player.cards.forEach((cv, i) => {
+                cards.push(<Card key={i} cv={0} x={10}
+                                 y={10 + (20 * i)}/>);
+              });
+              playerCardsTempl.push(
+                <Group key={p}>
+                  {cards}
+                </Group>);
+            } else if (p === 3 || (p === 0 && this.state.player_id === 3)) {
+              let cards = [];
+              player.cards.forEach((cv, i) => {
+                cards.push(<Card key={i} cv={0} x={450}
+                                 y={10 + (20 * i)}/>);
+              });
+              playerCardsTempl.push(
+                <Group key={p}>
+                  {cards}
+                </Group>);
+            }
           });
-          playerCardsTempl.push(
-            <Group key={p}>
-              { cards }
-            </Group>);
-        } else if (p === 1) {
-          let cards = [];
-          player.cards.forEach((cv, i) => {
-            cards.push(<Card key={i} cv={0} x={90+(30*i)} y={10}/>);
-          });
-          playerCardsTempl.push(
-            <Group key={p}>
-              { cards }
-            </Group>);
-        } else if (p === 2) {
-          let cards = [];
-          player.cards.forEach((cv, i) => {
-            cards.push(<Card key={i} cv={0} x={10} y={10+(20*i)}/>);
-          });
-          playerCardsTempl.push(
-            <Group key={p}>
-              { cards }
-            </Group>);
-        } else if (p === 3) {
-          let cards = [];
-          player.cards.forEach((cv, i) => {
-            cards.push(<Card key={i} cv={0} x={450} y={10+(20*i)}/>);
-          });
-          playerCardsTempl.push(
-            <Group key={p}>
-              { cards }
-            </Group>);
+        } else if (this.state.player_id === 0) {
+          this.shuffle();
         }
-      });
 
-      deckTempl.push(
-        <Group key={-1}>
-          <Card cv={0} x={200} y={116}/>
-          <Card cv={this.state.deck.current} x={260} y={116}/>
-        </Group>
-      )
+        break;
     }
 
     //if (!this.state.fullscreen) {
