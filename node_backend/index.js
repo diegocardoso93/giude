@@ -104,9 +104,14 @@ wss.on('connection', (ws) => {
       }
     } else if (pd.type === 'turn') {
       console.log(pd);
-      GM.updateState(pd.gameId, {players: pd.state.players, current_player: pd.state.current_player, deck: pd.state.deck});
       console.log(GM.games[pd.gameId].sharedState);
-      broadcastMessage(JSON.stringify({type: 'turn', state: GM.games[pd.gameId].sharedState}));
+      if (pd.state.color.length > 0) {
+        GM.updateState(pd.gameId, {players: pd.state.players, current_player: pd.state.current_player, deck: pd.state.deck, color: pd.state.color});
+        broadcastAll(JSON.stringify({type: 'turn', state: GM.games[pd.gameId].sharedState}));
+      } else {
+        GM.updateState(pd.gameId, {players: pd.state.players, current_player: pd.state.current_player, deck: pd.state.deck, color: ''});
+        broadcastMessage(JSON.stringify({type: 'turn', state: GM.games[pd.gameId].sharedState}));
+      }
     }
   });
 });

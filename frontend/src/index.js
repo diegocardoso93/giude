@@ -73,8 +73,10 @@ class Uno extends Component {
     current_player: 0,
     deck: { cards: Array.from(new Array(55), (x, i) => i+1), current: 0},
     scene: '',
+    action: '',
     qtt_players_wait: 0,
-    player_id: -1
+    player_id: -1,
+    color: ''
   };
   ws;
   constructor(props) {
@@ -84,6 +86,7 @@ class Uno extends Component {
     this.checkPlay = this.checkPlay.bind(this);
     this.setQttPlayer = this.setQttPlayer.bind(this);
     this.setReady = this.setReady.bind(this);
+    this.setColor = this.setColor.bind(this);
   }
   shuffle() {
     if (this.state.deck.cards.length > 0) {
@@ -106,7 +109,7 @@ class Uno extends Component {
     return this.state.deck.cards.splice(parseInt(Math.random() * this.state.deck.cards.length), 1)[0];
   }
   componentDidMount() {
-    this.ws = new WebSocket('ws://localhost:8080');
+    this.ws = new WebSocket('ws://192.168.1.101:8080');
     this.ws.onopen = () => {
       this.ws.send(JSON.stringify({gameId: 'uno', type: 'reqBootstrap'}));
     };
@@ -135,7 +138,11 @@ class Uno extends Component {
           this.gameInit();
         }
       } else if (data.type === 'turn') {
-        this.setState({players: data.state.players, current_player: data.state.current_player, deck: data.state.deck, shuffled: true});
+        if (data.state['color'].length > 0) {
+          this.setState({players: data.state.players, current_player: data.state.current_player, deck: data.state.deck, shuffled: true, color: data.state['color']});
+        } else {
+          this.setState({players: data.state.players, current_player: data.state.current_player, deck: data.state.deck, shuffled: true});
+        }
       }
     };
   }
@@ -165,6 +172,24 @@ class Uno extends Component {
     this.setState({fullscreen: true});
   }
 
+  withdrawCardMe() {
+    if (this.state.player_id === this.state.current_player) {
+      let {players, current_player, deck, qtt_players} = this.state;
+      players[current_player].cards.push(this.withdrawCard());
+      this.setState({
+        players: players,
+        current_player: ++current_player % qtt_players,
+        deck: deck
+      });
+      this.ws.send(JSON.stringify({
+        gameId: 'uno',
+        type: 'turn',
+        state: this.state,
+        color: ''
+      }));
+    }
+  }
+
   checkPlay(cv, i) {
     console.log(cv, this.verifyCard(cv), this.state.player_id, this.state.current_player);
     if (this.state.player_id === this.state.current_player) {
@@ -173,15 +198,26 @@ class Uno extends Component {
       let cards = players[current_player].cards;
       if (result > 0) {
         let next_state = this.state;
-        next_state.current_player = ++current_player % qtt_players;
         next_state.players = players;
         next_state.deck.current = cards.splice(i, 1)[0];
-        this.ws.send(JSON.stringify({gameId: 'uno', type: 'turn', state: next_state }));
-        this.setState({
-          players: next_state.players,
-          current_player: next_state.current_player,
-          deck: next_state.deck
-        });
+        if (result === 1) {
+          next_state.current_player = current_player;
+          this.setState({
+            players: next_state.players,
+            current_player: next_state.current_player,
+            deck: next_state.deck,
+            action: 'colorSelect'
+          });
+        } else {
+          let next_state = this.state;
+          next_state.current_player = ++current_player % qtt_players;
+          this.setState({
+            players: next_state.players,
+            current_player: next_state.current_player,
+            deck: next_state.deck
+          });
+        }
+        this.ws.send(JSON.stringify({gameId: 'uno', type: 'turn', state: next_state, color: ''}));
       }
     }
   }
@@ -195,13 +231,13 @@ class Uno extends Component {
     }
     // same color
     if ((["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[this.state.deck.current]) > -1
-      && ["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9"].indexOf(CardsMap[cin]) > -1)
+      && ["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET"].indexOf(CardsMap[cin]) > -1)
       ||(["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[this.state.deck.current]) > -1
-      && ["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9"].indexOf(CardsMap[cin]) > -1)
+      && ["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT"].indexOf(CardsMap[cin]) > -1)
       ||(["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[this.state.deck.current]) > -1
-      && ["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9"].indexOf(CardsMap[cin]) > -1)
+      && ["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET"].indexOf(CardsMap[cin]) > -1)
       ||(["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[this.state.deck.current]) > -1
-      && ["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9"].indexOf(CardsMap[cin]) > -1)
+      && ["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT"].indexOf(CardsMap[cin]) > -1)
     ) {
       return 3;
     }
@@ -261,7 +297,13 @@ class Uno extends Component {
       && CardsMap[cin] === "GRT")) {
       return 6;
     }
-
+    if ((this.state.color === 'red' && ["RE1", "RE2", "RE3", "RE4", "RE5", "RE6", "RE7", "RE8", "RE9", "REB", "RER", "RET", "CC", "AD4"].indexOf(CardsMap[cin]) > -1)
+    || (this.state.color === 'DodgerBlue' && ["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "BLB", "BLR", "BLT", "CC", "AD4"].indexOf(CardsMap[cin]) > -1)
+    || (this.state.color === 'yellow' && ["YE1", "YE2", "YE3", "YE4", "YE5", "YE6", "YE7", "YE8", "YE9", "YEB", "YER", "YET", "CC", "AD4"].indexOf(CardsMap[cin]) > -1)
+    || (this.state.color === 'green' && ["GR1", "GR2", "GR3", "GR4", "GR5", "GR6", "GR7", "GR8", "GR9", "GRB", "GRR", "GRT", "CC", "AD4"].indexOf(CardsMap[cin]) > -1)
+    ) {
+      return 7;
+    }
     return 0;
   }
 
@@ -274,7 +316,16 @@ class Uno extends Component {
   }
 
   setColor(v) {
-
+    let colors = ['red','DodgerBlue','yellow','green'];
+    let next_state = this.state;
+    next_state.color = colors[v];
+    next_state.action = '';
+    let {current_player, qtt_players} = this.state;
+    next_state.current_player = ++current_player % qtt_players;
+    this.ws.send(JSON.stringify({gameId: 'uno', type: 'turn', state: this.state}));
+    this.setState({
+      ...next_state
+    });
   }
 
   render() {
@@ -380,8 +431,8 @@ class Uno extends Component {
         if (this.state.shuffled) {
           deckTempl.push(
             <Group key={-1}>
-              <Card cv={0} x={200} y={116}/>
-              <Card cv={this.state.deck.current} x={260} y={116}/>
+              <Card cv={0} x={200} y={116} onClick={(e) => this.withdrawCardMe()} onTap={(e) => this.withdrawCardMe()}/>
+              <Card cv={this.state.deck.current} x={260} y={116} color={this.state.color}/>
             </Group>
           );
           this.state.players.forEach((player, p) => {
@@ -430,56 +481,72 @@ class Uno extends Component {
                 </Group>);
             }
           });
+
+          if (this.state.action === 'colorSelect') {
+            sceneTempl.push(
+              <Group key={-9}>
+                <Rect
+                  x={115}
+                  y={10}
+                  width={300}
+                  height={280}
+                  fill={'black'}
+                />
+                <Text key={-99}
+                      x={195}
+                      y={50}
+                      fontSize={14}
+                      fontFamily={'Arial Black'}
+                      fill={'white'}
+                      text={'Escolha uma cor'}
+                />
+                <Rect
+                  x={200}
+                  y={100}
+                  width={60}
+                  height={60}
+                  fill={'red'}
+                  cornerRadius={4}
+                  onClick={(e) => this.setColor(0)}
+                  onTap={(e) => this.setColor(0)}
+                />
+                <Rect
+                  x={270}
+                  y={100}
+                  width={60}
+                  height={60}
+                  fill={'DodgerBlue'}
+                  cornerRadius={4}
+                  onClick={(e) => this.setColor(1)}
+                  onTap={(e) => this.setColor(1)}
+                />
+                <Rect
+                  x={200}
+                  y={170}
+                  width={60}
+                  height={60}
+                  fill={'yellow'}
+                  cornerRadius={4}
+                  onClick={(e) => this.setColor(2)}
+                  onTap={(e) => this.setColor(2)}
+                />
+                <Rect
+                  x={270}
+                  y={170}
+                  width={60}
+                  height={60}
+                  fill={'green'}
+                  cornerRadius={4}
+                  onClick={(e) => this.setColor(3)}
+                  onTap={(e) => this.setColor(3)}
+                />
+              </Group>
+            );
+          }
         } else if (this.state.player_id === 0) {
           this.shuffle();
         }
         break;
-      case 'colorSelect':
-        sceneTempl.push(
-          <Group key={-9}>
-            <Rect
-              x={40}
-              y={20}
-              width={30}
-              height={30}
-              fill={'red'}
-              cornerRadius={4}
-              onClick={(e) => this.setColor(0)}
-              onTap={(e) => this.setColor(0)}
-            />
-            <Rect
-              x={70}
-              y={20}
-              width={30}
-              height={30}
-              fill={'DodgerBlue'}
-              cornerRadius={4}
-              onClick={(e) => this.setColor(1)}
-              onTap={(e) => this.setColor(1)}
-            />
-            <Rect
-              x={110}
-              y={20}
-              width={30}
-              height={30}
-              fill={'yellow'}
-              cornerRadius={4}
-              onClick={(e) => this.setColor(2)}
-              onTap={(e) => this.setColor(2)}
-            />
-            <Rect
-              x={150}
-              y={20}
-              width={30}
-              height={30}
-              fill={'green'}
-              cornerRadius={4}
-              onClick={(e) => this.setColor(3)}
-              onTap={(e) => this.setColor(3)}
-            />
-          </Group>
-        );
-      break;
     }
 
     //if (!this.state.fullscreen) {
@@ -501,6 +568,8 @@ class Uno extends Component {
             onClick={this.shuffle}
             onTap={this.shuffle}
           />
+
+
         </Layer>
       </Stage>
     );

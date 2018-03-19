@@ -517,6 +517,17 @@ class Card extends React.Component {
   }
 
   changeColorLayout() {
+    let selectedColorTmpl =
+        <Rect
+          x={14 + this.props.x}
+          y={24 + this.props.y}
+          width={40}
+          height={42}
+          fill={this.props['color']}
+          shadowBlur={5}
+          cornerRadius={6}
+        />;
+
     return (
       <Group>
         <Rect
@@ -608,6 +619,7 @@ class Card extends React.Component {
             });
           }}
         />
+
         <Shape
           sides={4}
           x={50 + this.props.x}
@@ -639,6 +651,7 @@ class Card extends React.Component {
             });
           }}
         />
+        { selectedColorTmpl }
       </Group>
     );
   }
