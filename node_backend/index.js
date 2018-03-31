@@ -106,12 +106,44 @@ wss.on('connection', (ws) => {
       console.log(pd);
       console.log(GM.games[pd.gameId].sharedState);
       if (pd.state.color.length > 0) {
-        GM.updateState(pd.gameId, {players: pd.state.players, current_player: pd.state.current_player, deck: pd.state.deck, color: pd.state.color});
-        broadcastAll(JSON.stringify({type: 'turn', state: GM.games[pd.gameId].sharedState}));
+        GM.updateState(pd.gameId, {
+          players: pd.state.players,
+          current_player: pd.state.current_player,
+          deck: pd.state.deck,
+          color: pd.state.color
+        });
+        broadcastAll(JSON.stringify({
+          type: 'turn',
+          state: GM.games[pd.gameId].sharedState
+        }));
+      } else if (pd.state.buy4 >= 0 || pd.state.buy2 >= 0) {
+        GM.updateState(pd.gameId, {
+          players: pd.state.players,
+          current_player: pd.state.current_player,
+          deck: pd.state.deck,
+          color: '',
+          buy4: pd.state.buy4,
+          buy2: pd.state.buy2
+        });
+        broadcastAll(JSON.stringify({
+          type: 'turn',
+          state: GM.games[pd.gameId].sharedState
+        }));
       } else {
-        GM.updateState(pd.gameId, {players: pd.state.players, current_player: pd.state.current_player, deck: pd.state.deck, color: ''});
-        broadcastMessage(JSON.stringify({type: 'turn', state: GM.games[pd.gameId].sharedState}));
+        GM.updateState(pd.gameId, {
+          players: pd.state.players,
+          current_player: pd.state.current_player,
+          deck: pd.state.deck,
+          color: '',
+          rotation: pd.state.rotation
+        });
+        broadcastMessage(JSON.stringify({
+          type: 'turn',
+          state: GM.games[pd.gameId].sharedState
+        }));
       }
+    } else if (pd.type === 'endGame') {
+
     }
   });
 });
