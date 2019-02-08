@@ -1,4 +1,4 @@
-## First world internetless multiplayer card game
+## Internetless multiplayer card game
 Using ESP32, React, Konva.  
 Work in progress...  
 It's just an experiment, feel free to contribute.
