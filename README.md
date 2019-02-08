@@ -1,7 +1,7 @@
 ## First world internetless multiplayer card game
-Using React and Konva.
-Work in progress...
-It's just an idea, feel free to contribute.
+Using ESP32, React, Konva.  
+Work in progress...  
+It's just an experiment, feel free to contribute.
 
 ## Intructions
 Install msys32 SDK Espressif  
@@ -15,3 +15,5 @@ To deploy (needs ESP-IDF):
 	
 	cd backend
 	make flash
+
+PS.: node_backend is temporary
